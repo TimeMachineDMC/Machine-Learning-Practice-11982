@@ -291,7 +291,26 @@ class ExpBackoffEstimator:
     """
     @staticmethod
     def estimate(range_query, table_stats):
-        # YOUR CODE HERE
+        selectivities = []
+        for col in range_query.column_names():
+            min_val = table_stats.columns[col].min_val()
+            max_val = table_stats.columns[col].max_val()
+            (left, right) = range_query.column_range(col, min_val, max_val)
+            col_cnt = table_stats.columns[col].between_row_count(left + 1, right)  # (left, right) -> [left, right)
+            col_sel = col_cnt / table_stats.row_count  # Individual selectivity
+            selectivities.append(col_sel)
+        
+        # Sort selectivities in ascending order and take the 4 most selective
+        selectivities.sort()
+        top_selectivities = selectivities[:4]  # Get 4 smallest selectivities
+
+        # Calculate exponential backoff selectivity
+        combined_sel = 1.0
+        for i, sel in enumerate(top_selectivities):
+            combined_sel *= sel ** (1 / (2 ** i))  # Exponential impact diminishes
+        
+        return combined_sel
+
         pass
 
 
@@ -301,5 +320,15 @@ class MinSelEstimator:
     """
     @staticmethod
     def estimate(range_query, table_stats):
-        # YOUR CODE HERE
+        min_sel = float('inf')  # Initialize to a very large value
+        for col in range_query.column_names():
+            min_val = table_stats.columns[col].min_val()
+            max_val = table_stats.columns[col].max_val()
+            (left, right) = range_query.column_range(col, min_val, max_val)
+            col_cnt = table_stats.columns[col].between_row_count(left + 1, right)  # (left, right) -> [left, right)
+            col_sel = col_cnt / table_stats.row_count  # Individual selectivity
+            min_sel = min(min_sel, col_sel)  # Update minimum selectivity
+        
+        return min_sel
+
         pass
